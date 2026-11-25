@@ -1,14 +1,21 @@
-# 风崖龙蛋 (Wind Cliff Dragon Egg)
+# Dragon Egg Quest
 
-手机网页 AR 小游戏：扫图卡 → 风吹时找出会晃的“石头” → 画圈召唤旋风孵化 → 小风龙起飞。
+A classroom AR treasure hunt for phones. Solve clues, scan 6 QR cards, hatch 3 dragons, power them up with gems, defeat the Storm Dragon and win back the Power Stone. About 8–10 minutes.
 
-## 发布到 GitHub Pages
-1. 新建一个 Public 仓库，上传本文件夹里的全部内容（index.html 要在根目录）。
-2. Settings → Pages → Source 选 Deploy from a branch，分支 main、目录 / (root)，保存。
-3. 等一两分钟，用手机打开显示的 https 网址。
-4. 打印 `assets/card-windcliff.png`（建议 A4 以上，哑光纸）。
+**Play:** https://juliaguo20.github.io/dragon-egg/
 
-## 致谢
-- 幼龙模型：[Low Poly Dragon](https://bocdagla.itch.io/low-poly-dragon) by bocdagla（需署名；本项目做了改色与缩放）
-- 场景模型：[Kenney Nature Kit](https://kenney.nl/assets/nature-kit)（CC0）
-- [three.js](https://threejs.org)、[MindAR](https://github.com/hiukim/mind-ar-js)（MIT）
+## Set up
+1. Print `cards.pdf` at 100% size (page 1: QR cards, page 2: teacher sheet, page 3: paper clue slips).
+2. Hide the cards as listed on the teacher sheet.
+3. Open the game, choose **In-app clues** or **Paper clues**, and allow the camera.
+
+If a card will not scan, tap **Type the code instead** and enter the code printed under it.
+Edit clues in `content.js` (then update the teacher sheet).
+
+## Publish (GitHub Pages)
+Settings → Pages → Deploy from a branch → `main`, `/ (root)`.
+
+## Credits
+- Dragon model: [Low Poly Dragon](https://bocdagla.itch.io/low-poly-dragon) by bocdagla (recoloured and resized; attribution required)
+- Scenery: [Kenney Nature Kit](https://kenney.nl/assets/nature-kit) (CC0)
+- [three.js](https://threejs.org) (MIT), [jsQR](https://github.com/cozmo/jsQR) (Apache-2.0)
