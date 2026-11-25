@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>龙蛋 · 风崖</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;font-family:"Noto Serif SC","Songti SC",serif;background:linear-gradient(#1c2b4a,#8a5540 60%,#241a17)}
+#ar,#touch{position:fixed;inset:0;overflow:hidden}
+#touch{touch-action:none;z-index:2}
+.hidden{display:none!important}
+.panel{background:#f3e5c2;color:#33231a;border:3px solid #a9813a;border-radius:14px;box-shadow:0 8px 30px #0008;text-align:center}
+.screen{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:22px;background:#0b0f1acc}
+.screen .panel{padding:24px 20px;max-width:380px;width:100%}
+h1{font-size:30px;letter-spacing:4px;margin-bottom:12px}
+p{font-size:16px;line-height:1.65;margin:8px 0}
+small{font-size:12px;opacity:.75;display:block;line-height:1.6}
+button{font-family:inherit;font-size:17px;font-weight:600;padding:12px 18px;border-radius:10px;border:2px solid #8a6424;background:#e9bd55;color:#2d1e0e;width:100%;margin-top:10px}
+button.alt{background:transparent}
+label{display:flex;gap:8px;align-items:center;justify-content:center;font-size:14px;margin-top:10px}
+#msg{position:fixed;left:14px;right:14px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:3;padding:14px;font-size:17px;line-height:1.5;pointer-events:none}
+#bottom{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(112px + env(safe-area-inset-bottom));z-index:4;width:230px}
+#bottom button{background:#f3e5c2dd;font-size:15px}
+#meter{position:fixed;left:30px;right:30px;top:calc(60px + env(safe-area-inset-top));z-index:3;height:20px;border:2px solid #e9c46a;border-radius:10px;background:#0008;overflow:hidden}
+#fill{height:100%;width:0;background:linear-gradient(90deg,#3fbfc4,#d9fffa)}
+#mute{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:4;width:auto;margin:0;padding:6px 12px;font-size:14px;background:#f3e5c2cc}
+</style>
+<script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
+</head>
+<body>
+<div id="ar"></div>
+<div id="touch"></div>
+
+<div id="start" class="screen"><div class="panel">
+  <h1>风崖龙蛋</h1>
+  <p>一场风暴把龙蛋卷出了巢。<br>它混在石头里。找到它，弄清它怎么孵化。</p>
+  <button id="go" disabled>加载中…</button>
+  <label><input type="checkbox" id="clues" checked> 显示线索（取消勾选可做教学对比）</label>
+  <small>请允许使用相机。画面只在本机处理，不拍照、不上传。</small>
+</div></div>
+
+<div id="end" class="screen hidden"><div class="panel">
+  <h1>风龙出壳！</h1>
+  <p id="stats"></p>
+  <button id="again">再玩一次</button>
+  <button id="credbtn" class="alt">致谢</button>
+  <small id="credits" class="hidden">幼龙模型：bocdagla《Low Poly Dragon》，经改色与缩放<br>bocdagla.itch.io/low-poly-dragon<br>场景模型：Kenney Nature Kit（CC0）· kenney.nl<br>技术：three.js、MindAR（MIT）</small>
+</div></div>
+
+<div id="msg" class="panel hidden"></div>
+<div id="meter" class="hidden"><div id="fill"></div></div>
+<div id="bottom"><button id="skip" class="hidden">扫不到？直接进入</button></div>
+<button id="mute" class="hidden">声音：开</button>
+
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const $=id=>document.getElementById(id);
+const show=(id,v=true)=>$(id).classList.toggle('hidden',!v);
+const say=t=>{$('msg').textContent=t;show('msg',!!t)};
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=THREE.MathUtils.clamp;
+
+/* ---------- 场景 ---------- */
+const world=new THREE.Group(); world.visible=false;
+const GROUND=-0.35;
+const loader=new GLTFLoader();
+const load=n=>loader.loadAsync(`./assets/${n}.glb`);
+const mat=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95});
+
+function addLights(scene){
+  scene.add(new THREE.HemisphereLight(0xdbe8ff,0x4a342a,1.7));
+  const d=new THREE.DirectionalLight(0xffd2a0,2.2); d.position.set(1,2,1.5); scene.add(d);
+}
+/* 龙蛋和普通石头用同一种生成方法，外形才分不出来 */
+function rockGeo(){
+  const g=new THREE.IcosahedronGeometry(.105,1), p=g.attributes.position, seen=new Map(), v=new THREE.Vector3();
+  const sy=rand(1.12,1.3);
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i); const k=v.toArray().map(n=>n.toFixed(3)).join();
+    if(!seen.has(k)) seen.set(k,rand(.9,1.1));
+    v.multiplyScalar(seen.get(k)); v.y*=sy; p.setXYZ(i,v.x,v.y,v.z);
+  }
+  g.computeVertexNormals(); g.computeBoundingBox(); return g;
+}
+function cracks(geo){
+  const p=geo.attributes.position, pts=[], v=new THREE.Vector3();
+  const front=[]; for(let i=0;i<p.count;i+=3){const c=new THREE.Vector3();for(let k=0;k<3;k++)c.add(v.fromBufferAttribute(p,i+k));c.divideScalar(3);if(c.z>.04)front.push(i)}
+  front.sort(()=>Math.random()-.5).slice(0,7).forEach(i=>{
+    for(const [a,b] of [[0,1],[1,2]]) for(const k of [a,b]) pts.push(v.fromBufferAttribute(p,i+k).multiplyScalar(1.015).clone());
+  });
+  // 用细圆柱画裂纹：手机和投屏上比 1 像素的线清楚
+  const g=new THREE.Group(), m=new THREE.MeshBasicMaterial({color:0xa8fff4,transparent:true,opacity:0});
+  for(let i=0;i<pts.length;i+=2){
+    const a=pts[i],b=pts[i+1],c=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,a.distanceTo(b),4),m);
+    c.position.copy(a).add(b).multiplyScalar(.5);
+    c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize()); g.add(c);
+  }
+  g.userData.mat=m; return g;
+}
+
+const slots=[[-.34,.12],[0,.27],[.34,.1],[-.17,-.17],[.18,-.19]];
+let rocks=[], egg, eggCracks, ring, grasses=[], streaks=[], shards=[], swirl=[], dragon, mixer, actions={}, head;
+
+async function buildScenery(){
+  const ground=new THREE.Mesh(new THREE.CylinderGeometry(.72,.5,.2,11),mat(0x6d5244));
+  ground.position.y=GROUND-.1; ground.scale.z=.75; world.add(ground);
+  const place=async(name,x,z,h,color,ry=0)=>{
+    const o=(await load(name)).scene; const b=new THREE.Box3().setFromObject(o), s=h/(b.max.y-b.min.y);
+    o.traverse(c=>{if(c.isMesh)c.material=mat(color)});
+    const w=new THREE.Group(); o.scale.setScalar(s); o.position.y=-b.min.y*s; w.add(o);
+    w.position.set(x,GROUND,z); w.rotation.y=ry; world.add(w); return w;
+  };
+  await place('rock_tallB',-.58,-.33,.55,0x57484a);
+  await place('rock_tallF',.56,-.36,.75,0x4c3f45,1);
+  await place('stump_old',-.55,.22,.16,0x4e3b2c);
+  await place('log',.52,.3,.07,0x5b432f,.7);
+  for(const [x,z] of [[-.5,.0],[-.22,.37],[.2,.4],[.52,-.04],[-.03,.0],[-.38,-.3],[.36,-.3],[.0,-.27]])
+    grasses.push(await place('grass_large',x,z,rand(.09,.14),0xc3a35a,rand(0,6)));
+  const sm=new THREE.MeshBasicMaterial({color:0xe9fffb,transparent:true,opacity:0,depthWrite:false});
+  for(let i=0;i<22;i++){const s=new THREE.Mesh(new THREE.PlaneGeometry(rand(.1,.28),.006),sm);
+    s.position.set(rand(-.8,.8),rand(GROUND+.02,.25),rand(-.3,.45));s.userData.v=rand(.9,1.7);streaks.push(s);world.add(s)}
+  ring=new THREE.Mesh(new THREE.TorusGeometry(.14,.009,6,36),new THREE.MeshBasicMaterial({color:0xffe27a}));
+  ring.rotation.x=Math.PI/2; world.add(ring);
+}
+
+async function buildDragon(){
+  const g=await load('dragon');
+  const c=document.createElement('canvas'); c.width=c.height=4; const x=c.getContext('2d');
+  x.fillStyle='#b8c9d8'; x.fillRect(0,0,4,4);
+  [[0,0,'#35aab5'],[1,0,'#f2fbff'],[0,1,'#8cf1e4'],[0,3,'#ffd35a']].forEach(([a,b,col])=>{x.fillStyle=col;x.fillRect(a,b,1,1)});
+  const tex=new THREE.CanvasTexture(c); tex.flipY=false; tex.colorSpace=THREE.SRGBColorSpace;
+  tex.magFilter=tex.minFilter=THREE.NearestFilter; tex.generateMipmaps=false;
+  const model=g.scene;
+  model.traverse(o=>{if(o.isMesh){o.material=new THREE.MeshStandardMaterial({map:tex,roughness:.55,metalness:.15,emissive:0x203038});o.frustumCulled=false}
+    if(o.isBone&&o.name==='Head')head=o});
+  mixer=new THREE.AnimationMixer(model);
+  g.animations.forEach(a=>actions[a.name]=mixer.clipAction(a));
+  actions.Idle_loop.play(); mixer.update(.01); model.updateMatrixWorld(true);
+  const b=new THREE.Box3(), v=new THREE.Vector3();
+  model.traverse(o=>{if(o.isSkinnedMesh){const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){o.getVertexPosition(i,v);b.expandByPoint(v.applyMatrix4(o.matrixWorld))}}});
+  const size=b.getSize(new THREE.Vector3()), s=.6/Math.max(size.x,size.y,size.z), ctr=b.getCenter(new THREE.Vector3());
+  model.scale.multiplyScalar(s); model.position.set(-ctr.x*s,-ctr.y*s,-ctr.z*s);
+  const spin=new THREE.Group(); spin.add(model);
+  dragon=new THREE.Group(); dragon.add(spin); dragon.userData={spin,half:size.y*s/2}; dragon.visible=false; world.add(dragon);
+}
+
+function newRound(){
+  [...rocks,...shards,...swirl].forEach(o=>world.remove(o)); rocks=[]; shards=[]; swirl=[];
+  const which=Math.floor(Math.random()*5);
+  slots.forEach(([x,z],i)=>{
+    const geo=rockGeo(), m=new THREE.Mesh(geo,mat(new THREE.Color().setHSL(.6,.05,rand(.4,.47))));
+    const y=GROUND-geo.boundingBox.min.y-.012;
+    m.position.set(x,y,z); m.rotation.y=rand(-.4,.4); m.userData={y,flip:0,egg:i===which}; world.add(m); rocks.push(m);
+    if(i===which){egg=m;eggCracks=cracks(geo);m.add(eggCracks)}
+  });
+  ring.visible=false; ring.position.set(egg.position.x,GROUND+.012,egg.position.z);
+  dragon.visible=false; dragon.userData.spin.rotation.set(0,0,0);
+}
+
+/* ---------- 声音 ---------- */
+let ac, windGain, buf, muted=false;
+function initAudio(){
+  ac=new (window.AudioContext||window.webkitAudioContext)(); ac.resume();
+  const n=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate), d=n.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  buf=n; const src=ac.createBufferSource(); src.buffer=n; src.loop=true;
+  const f=ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=450; f.Q.value=.8;
+  windGain=ac.createGain(); windGain.gain.value=0; src.connect(f).connect(windGain).connect(ac.destination); src.start();
+}
+function crackSound(){ if(!ac||muted)return; for(let i=0;i<4;i++){const s=ac.createBufferSource(),g=ac.createGain(),t=ac.currentTime+i*.055;s.buffer=buf;g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.04);s.connect(g).connect(ac.destination);s.start(t,Math.random(),.05)} }
+function chirp(){ if(!ac||muted)return; [0,.28].forEach(d=>{const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+d;o.type='triangle';o.frequency.setValueAtTime(520,t);o.frequency.exponentialRampToValueAtTime(1300,t+.12);o.frequency.exponentialRampToValueAtTime(700,t+.22);g.gain.setValueAtTime(.001,t);g.gain.exponentialRampToValueAtTime(.22,t+.03);g.gain.exponentialRampToValueAtTime(.001,t+.24);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+.25)}) }
+
+/* ---------- 画面与扫描 ---------- */
+let mindar, anchor, renderer, scene, ownCam=new THREE.PerspectiveCamera(48,1,.01,50), useTracking=false;
+async function startView(){
+  try{
+    const {MindARThree}=await import('./lib/mindar-image-three.prod.js');
+    mindar=new MindARThree({container:$('ar'),imageTargetSrc:'./assets/windcliff.mind',uiLoading:'no',uiScanning:'no',uiError:'no',filterMinCF:.0001,filterBeta:.001});
+    ({renderer,scene}=mindar); anchor=mindar.addAnchor(0);
+    anchor.onTargetFound=()=>{ if(phase==='scan'){useTracking=true;snap=true;enterFind()} };
+    await Promise.race([mindar.start(),new Promise((_,r)=>setTimeout(()=>r(new Error('camera timeout')),15000))]);
+    return true;
+  }catch(e){
+    console.warn('camera/AR unavailable',e);
+    $('ar').innerHTML=''; mindar=anchor=null;
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.setSize(innerWidth,innerHeight); $('ar').appendChild(renderer.domElement); scene=new THREE.Scene();
+    addEventListener('resize',()=>renderer&&renderer.setSize(innerWidth,innerHeight));
+    return false;
+  }
+}
+function placeOwn(){
+  const el=renderer.domElement, cw=el.clientWidth||innerWidth, ch=el.clientHeight||innerHeight;
+  ownCam.aspect=cw/ch; ownCam.updateProjectionMatrix();
+  const t=Math.tan(THREE.MathUtils.degToRad(24)), visW=Math.min(cw,innerWidth)/cw;
+  const dist=Math.max(2.1,.74/(t*ownCam.aspect*visW));
+  ownCam.position.set(0,dist*.33,dist); ownCam.lookAt(0,-.12,0);
+  world.position.set(0,0,0); world.quaternion.identity(); world.scale.setScalar(1);
+}
+const tp=new THREE.Vector3(), tq=new THREE.Quaternion(), ts=new THREE.Vector3(), tilt=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),.38);
+let snap=true;
+function follow(){
+  if(!anchor.group.visible)return; // 图卡暂时丢失时，场景停在原处
+  anchor.group.matrix.decompose(tp,tq,ts); tq.multiply(tilt);
+  const k=snap?1:.25; snap=false;
+  world.position.lerp(tp,k); world.quaternion.slerp(tq,k); world.scale.lerp(ts,k);
+}
+
+/* ---------- 流程 ---------- */
+let phase='loading', T=0, phaseT=0, startAt=0, wrong=0, gustN=0, progress=0, stage=0, noteUntil=0, hintLevel=0, cluesOn=true;
+function setPhase(p){phase=p;phaseT=0}
+function enterScan(){setPhase('scan');world.visible=false;say(anchor?'把镜头对准“风崖”图卡':'');show('skip',!!anchor);if(!anchor){enterFind()}}
+function enterFind(){
+  setPhase('find'); show('skip',false); world.visible=true; startAt=performance.now(); wrong=0; hintLevel=0; noteUntil=0;
+  if(mindar&&!useTracking){mindar.controller.stopProcessVideo()}
+  say(cluesOn?'五块石头里藏着一枚龙蛋。风来时仔细看，找到后点它。':'五块石头里藏着一枚龙蛋。点一点试试。');
+}
+function enterHatch(){
+  setPhase('hatch'); progress=0; stage=0; lastP=null; ring.visible=false; show('meter'); $('fill').style.width='0';
+  rocks.forEach(r=>{if(r!==egg)r.visible=false}); crackSound();
+  say('找到了！它喜欢风……');
+  for(let i=0;i<36;i++){const m=new THREE.Mesh(new THREE.TetrahedronGeometry(.008),new THREE.MeshBasicMaterial({color:0xc8fff6}));m.userData={a:rand(0,6.3),r:rand(.17,.34),h:rand(-.1,.22),v:rand(.6,1.4)};m.visible=false;swirl.push(m);world.add(m)}
+}
+function burst(n){
+  for(let i=0;i<n;i++){const m=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(.025,.05)),mat(0x8d9298));
+    m.position.copy(egg.position).add(new THREE.Vector3(rand(-.08,.08),rand(0,.12),rand(-.06,.1)));
+    m.userData.v=new THREE.Vector3(rand(-.6,.6),rand(.4,1.1),rand(-.3,.6));shards.push(m);world.add(m)}
+  crackSound();
+}
+function enterFly(){
+  setPhase('fly'); show('meter',false); burst(22); egg.visible=false; swirl.forEach(s=>s.visible=false);
+  dragon.visible=true; dragon.userData.stage=0; dragon.position.set(egg.position.x,GROUND+dragon.userData.half,egg.position.z); dragon.rotation.set(0,0,0);
+  mixer.stopAllAction(); actions.Idle_loop.reset().play(); chirp(); say('一条银青色的小风龙！');
+}
+function enterEnd(){
+  setPhase('end'); say('');
+  $('stats').textContent=`用时 ${Math.round((performance.now()-startAt)/1000)} 秒 · 翻错石头 ${wrong} 次`;
+  show('end');
+}
+
+/* ---------- 触摸 ---------- */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(); let lastP=null;
+$('touch').addEventListener('pointerdown',e=>{
+  lastP=[e.clientX,e.clientY]; if(phase!=='find')return;
+  const cam=useTracking?mindar.camera:ownCam, r=renderer.domElement.getBoundingClientRect();
+  ndc.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1); ray.setFromCamera(ndc,cam);
+  const hit=ray.intersectObjects(rocks,false)[0]; if(!hit)return;
+  const o=hit.object; if(o.userData.egg){enterHatch();return}
+  if(!o.userData.flip){o.userData.flip=.001;wrong++;noteUntil=T+2.2;say('翻过来看看……只是一块石头。')}
+});
+addEventListener('pointermove',e=>{
+  if(phase!=='hatch'||!lastP||phaseT<.5)return;
+  const d=Math.hypot(e.clientX-lastP[0],e.clientY-lastP[1]); lastP=[e.clientX,e.clientY];
+  if(d>1)progress+=Math.min(d,80)/(Math.min(innerWidth,500)*6); // 画圈或来回划都算
+});
+addEventListener('pointerup',()=>lastP=null); addEventListener('pointercancel',()=>lastP=null);
+
+/* ---------- 每帧 ---------- */
+const clock=new THREE.Clock();
+function frame(){
+  const dt=Math.min(clock.getDelta(),.05); T+=dt; phaseT+=dt;
+  const cyc=T%4.5, gust=cyc<1.5?Math.sin(cyc/1.5*Math.PI):0;
+  const late=(cyc-.55), wob=late>0&&late<1.2?Math.sin(late/1.2*Math.PI):0;
+  const hatching=phase==='hatch';
+  if(windGain)windGain.gain.value=muted||hatching||phase==='end'||!world.visible?0:.025+gust*.2;
+  grasses.forEach((g,i)=>{const w=hatching?progress:gust;g.rotation.z=-w*(.5+.08*Math.sin(T*14+i))});
+  streaks.forEach(s=>{s.position.x+=s.userData.v*dt;if(s.position.x>.85)s.position.x=-.85});
+  if(streaks[0])streaks[0].material.opacity=(hatching?progress:gust)*.7;
+
+  if(phase==='find'){
+    const lv=cluesOn?(phaseT>30?2:phaseT>15?1:0):0;
+    if(lv!==hintLevel){hintLevel=lv;say(lv===1?'提示：风过去后，哪一块还在动？':'看黄圈！点那块发光的石头。');noteUntil=0}
+    if(noteUntil&&T>noteUntil){noteUntil=0;say('继续找：先看草动，再看石头。')}
+    const k=cluesOn?wob*(hintLevel?1.8:1):0;
+    egg.rotation.z=Math.sin(T*16)*.13*k; eggCracks.userData.mat.opacity=Math.min(1,k);
+    ring.visible=hintLevel===2; ring.scale.setScalar(1+.08*Math.sin(T*6));
+    rocks.forEach(r=>{const u=r.userData;if(u.flip){u.flip+=dt/1.1;const f=Math.min(u.flip,1);r.rotation.x=f*Math.PI*2;r.position.y=u.y+Math.sin(f*Math.PI)*.16;if(u.flip>=1){u.flip=0;r.rotation.x=0;r.position.y=u.y}}});
+  }
+  if(hatching){
+    if(!lastP)progress=Math.max(0,progress-dt*.02);
+    if(phaseT>.5)say(progress>.66?'快出来了！旋风再快一点！':progress>.33?'蛋壳裂开了！继续画圈！':phaseT>6&&progress<.08?'手指按住屏幕不放，围着龙蛋一圈一圈地画':'用手指在龙蛋周围画圈，召唤旋风！');
+    progress=Math.min(progress,1); $('fill').style.width=progress*100+'%';
+    egg.rotation.z=Math.sin(T*(10+progress*18))*(.04+progress*.28);
+    eggCracks.userData.mat.opacity=.3+progress*.7;
+    const st=Math.floor(progress*3); if(st>stage&&progress<1){stage=st;burst(5)}
+    swirl.forEach((s,i)=>{const u=s.userData;u.a+=dt*u.v*(2+progress*9);s.visible=i<progress*36+3;s.position.set(egg.position.x+Math.cos(u.a)*u.r,egg.position.y+u.h,egg.position.z+Math.sin(u.a)*u.r)});
+    if(progress>=1)enterFly();
+  }
+  shards.forEach(m=>{const v=m.userData.v;if(m.position.y>GROUND+.015){v.y-=2.4*dt;m.position.addScaledVector(v,dt);m.rotation.x+=dt*6;m.rotation.y+=dt*4}});
+
+  if(phase==='fly'||phase==='end'){
+    const d=dragon, u=d.userData, t=phase==='end'?T:phaseT, rest=GROUND+u.half;
+    if(phase==='fly'&&t<4){
+      d.scale.setScalar(Math.min(1,.25+t*1.4));
+      const f=clamp((t-1.6)/1.1,0,1);   // 被自己扇的风掀个跟头
+      u.spin.rotation.x=-f*Math.PI*2; d.position.y=rest+Math.sin(f*Math.PI)*.2;
+      if(t>1.6&&u.stage===0){u.stage=1;say('它扇起一阵风，把自己掀了个跟头！')}
+      if(t>3&&u.stage===1){u.stage=2;const a=actions.GroundToFly;a.reset().setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;actions.Idle_loop.fadeOut(.2);a.fadeIn(.2).play();say('小风龙站起来，张开翅膀……')}
+    }else{
+      if(u.stage<3){u.stage=3;mixer.stopAllAction();actions.Flying_loop.reset().play();u.t0=T;u.from=d.position.clone();say('飞起来了！');chirp()}
+      const e=T-u.t0, k=Math.min(e/1.5,1), a=e*1.25;
+      const orbit=new THREE.Vector3(Math.sin(a)*.34,.12+Math.sin(e*2.2)*.04,Math.cos(a)*.22);
+      d.position.lerpVectors(u.from,orbit,k*k*(3-2*k)); d.rotation.y=(a+Math.PI/2)*k;
+      if(phase==='fly'&&e>6)enterEnd();
+    }
+    mixer.update(dt);
+    if(head)head.scale.setScalar(1.4); // 头大一点更像幼龙
+  }
+  if(useTracking)follow(); else placeOwn();
+  renderer.render(scene,useTracking?mindar.camera:ownCam);
+}
+
+/* ---------- 启动 ---------- */
+$('go').onclick=async()=>{
+  cluesOn=$('clues').checked; $('go').disabled=true; $('go').textContent='正在打开相机…';
+  try{initAudio()}catch(e){console.warn(e)}
+  const cam=await startView();
+  addLights(scene); scene.add(world); show('start',false); show('mute'); renderer.setAnimationLoop(frame);
+  enterScan(); if(!cam)say('相机没有打开，先用无相机模式。五块石头里藏着一枚龙蛋。');
+};
+$('skip').onclick=()=>{useTracking=false;enterFind()};
+$('mute').onclick=()=>{muted=!muted;$('mute').textContent='声音：'+(muted?'关':'开')};
+$('again').onclick=()=>{
+  show('end',false);show('credits',false);newRound();useTracking=false;snap=true;
+  if(mindar){anchor.visible=false;anchor.group.visible=false;mindar.controller.processVideo(mindar.video)}
+  cluesOn=$('clues').checked; enterScan();
+};
+$('credbtn').onclick=()=>{$('credits').classList.toggle('hidden')};
+
+window.__game={get phase(){return phase},get progress(){return progress},get tracking(){return useTracking},
+  eggScreen(){const v=egg.getWorldPosition(new THREE.Vector3()).project(useTracking?mindar.camera:ownCam),r=renderer.domElement.getBoundingClientRect();return[r.left+(v.x+1)/2*r.width,r.top+(1-v.y)/2*r.height]}};
+Promise.all([buildScenery(),buildDragon()]).then(()=>{newRound();$('go').disabled=false;$('go').textContent='开始冒险'})
+  .catch(e=>{console.error(e);$('go').textContent='加载失败，请刷新'});
+</script>
+</body>
+</html>
