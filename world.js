@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRAGONS} from './content.js';
 
-export const GROUND=-0.35;
+export const FLOOR=-0.4;
 export const rand=(a,b)=>a+Math.random()*(b-a);
 export const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 export const mat=(c,extra={})=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.9,...extra});
@@ -14,36 +14,18 @@ const loader=new GLTFLoader();
 const cache={};
 const load=n=>loader.loadAsync(`./assets/${n}.glb`);
 export async function preload(){
-  for(const n of ['rock_tallB','rock_tallF','grass_large','stump_old','log']) cache[n]=(await load(n)).scene;
+  for(const n of ['grass_large']) cache[n]=(await load(n)).scene;
 }
 
-function prop(name,x,z,h,color,ry=0){
-  const o=cache[name].clone(true), b=new THREE.Box3().setFromObject(o), s=h/(b.max.y-b.min.y);
+export function prop(name,h,color){
+  const o=cache[name].clone(true), box=new THREE.Box3().setFromObject(o), s=h/(box.max.y-box.min.y);
   o.traverse(c=>{if(c.isMesh)c.material=mat(color)});
-  o.scale.setScalar(s); o.position.y=-b.min.y*s;
-  const w=new THREE.Group(); w.add(o); w.position.set(x,GROUND,z); w.rotation.y=ry; return w;
+  o.scale.setScalar(s); o.position.y=-box.min.y*s;
+  const w=new THREE.Group(); w.add(o); return w;
 }
-
-const THEMES={
-  fire:  {ground:0x3b2724,rock:[0x2c2022,0x3a2523],plant:0x5a3023},
-  water: {ground:0xbfe3ee,rock:[0x6f93aa,0x86a9bd],plant:0xe8fbff},
-  wind:  {ground:0x6d5244,rock:[0x57484a,0x4c3f45],plant:0xc3a35a},
-  storm: {ground:0x2c2438,rock:[0x221c2e,0x2d2440],plant:0x4a3a66}
-};
-
-export function scenery(theme){
-  const t=THEMES[theme], g=new THREE.Group(); g.userData.grass=[];
-  const base=mesh(new THREE.CylinderGeometry(.72,.5,.2,11),mat(t.ground),0,GROUND-.1,0); base.scale.z=.75; g.add(base);
-  g.add(prop('rock_tallB',-.58,-.33,.55,t.rock[0]),prop('rock_tallF',.56,-.36,.75,t.rock[1],1));
-  if(theme==='wind') g.add(prop('stump_old',-.55,.22,.16,0x4e3b2c),prop('log',.52,.3,.07,0x5b432f,.7));
-  for(const [x,z] of [[-.5,0],[-.22,.38],[.2,.41],[.52,-.04],[-.38,-.3],[.36,-.3],[0,-.3]]){
-    let p;
-    if(theme==='water') p=mesh(new THREE.ConeGeometry(.025,rand(.08,.16),5),mat(0xd9f6ff,{roughness:.2}),x,GROUND+.05,z);
-    else if(theme==='fire') p=mesh(new THREE.OctahedronGeometry(rand(.018,.032)),new THREE.MeshBasicMaterial({color:0xff6a2a}),x,GROUND+.02,z);
-    else {p=prop('grass_large',x,z,rand(.09,.14),t.plant,rand(0,6));g.userData.grass.push(p)}
-    g.add(p);
-  }
-  return g;
+export function shadow(r){
+  const m=mesh(new THREE.CircleGeometry(r,20),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.28,depthWrite:false}));
+  m.rotation.x=-Math.PI/2; return m;
 }
 
 /* Egg and decoy rocks share one generator so they look alike. */

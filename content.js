@@ -24,18 +24,18 @@ export const CARDS = [
 ];
 
 export const EGG = {
-  fire:  {find:'Five rocks. One is warm inside. Watch for a red glow, then tap it.', stuck:'Look for the cracks that light up.',
+  fire:  {find:'Turn around! Tap the rock that glows red.', stuck:'Look for the cracks that light up.',
           hatch:'Rub the screen quickly to warm the egg!', baby:'Achoo! Only black smoke comes out. Your baby dragon has no power yet.'},
-  water: {find:'Tap the rocks and listen. One of them knocks back!', stuck:'Listen for two knocks and watch for ripples.',
+  water: {find:'Turn around! Tap rocks until one knocks back.', stuck:'Listen for two knocks and watch for ripples.',
           hatch:'Press and hold the screen to melt the ice.', baby:'Blub… only tiny bubbles. Your baby dragon has no power yet.'},
-  wind:  {find:'Wait for the wind. One rock keeps wobbling. Tap it!', stuck:'Watch the grass, then the rocks.',
+  wind:  {find:'Turn around! Tap the rock that wobbles in the wind.', stuck:'Watch the grass, then the rocks.',
           hatch:'Draw circles around the egg to make a whirlwind!', baby:'It flaps and flips itself over! Your baby dragon has no power yet.'}
 };
 
 export const POWER = {
-  fire:  {try:'Tap to breathe fire and light the torch!', done:'WHOOSH! Fire melts ice and lights the dark.'},
-  water: {try:'Tap to spray water and put out the campfire!', done:'SPLASH! Water cools anything hot.'},
-  wind:  {try:'Tap to blow the dark cloud away!', done:'FWOOSH! Wind sweeps clouds away.'}
+  fire:  {try:'Find the torch around you and tap it!', done:'WHOOSH! Fire melts ice and lights the dark.'},
+  water: {try:'Find the campfire around you and tap it!', done:'SPLASH! Water cools anything hot.'},
+  wind:  {try:'Find the dark cloud around you and tap it!', done:'FWOOSH! Wind sweeps clouds away.'}
 };
 
 export const ATTACKS = [
