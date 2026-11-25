@@ -14,7 +14,7 @@ const loader=new GLTFLoader();
 const cache={};
 const load=n=>loader.loadAsync(`./assets/${n}.glb`);
 export async function preload(){
-  for(const n of ['grass_large']) cache[n]=(await load(n)).scene;
+  for(const n of ['rock_tallB','rock_tallF','grass_large','stump_old','log']) cache[n]=(await load(n)).scene;
 }
 
 export function prop(name,h,color){
@@ -26,6 +26,60 @@ export function prop(name,h,color){
 export function shadow(r){
   const m=mesh(new THREE.CircleGeometry(r,20),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.28,depthWrite:false}));
   m.rotation.x=-Math.PI/2; return m;
+}
+
+/* A small themed set that appears in front of the player. Origin: middle of its floor, front is +z. */
+export function scenery(kind){
+  const g=new THREE.Group(), grass=[];
+  const look={fire:{ground:0x3b2724,rock:[0x2c2022,0x4a2a24]},water:{ground:0xbfe3ee,rock:[0x6f93aa,0x9cc4d6]},wind:{ground:0x7a5b46,rock:[0x6a5558,0x574650]}}[kind];
+  const floor=mesh(new THREE.CylinderGeometry(.72,.58,.14,12),mat(look.ground),0,-.07,0); floor.scale.z=.72; g.add(floor);
+  const put=(o,x,y,z,ry=0)=>{o.position.x+=x;o.position.y+=y;o.position.z+=z;o.rotation.y=ry;g.add(o);return o};
+  for(const [n,x,z,h,c] of [['rock_tallB',-.6,-.28,.72,0],['rock_tallF',.6,-.3,.82,1],['rock_tallF',-.28,-.46,.5,1],['rock_tallB',.24,-.47,.42,0]])
+    put(prop(n,h,look.rock[c]),x,0,z,x*3);
+  if(kind==='fire'){
+    for(const [x,z,r] of [[-.52,.12,.06],[.55,.1,.05],[-.12,-.36,.07],[.42,-.3,.045],[-.42,-.2,.05]]){
+      const c=mesh(new THREE.OctahedronGeometry(r),new THREE.MeshBasicMaterial({color:0xff6a2a}),x,r,z); c.scale.y=1.8; g.add(c)}
+    for(const [x,z,s] of [[-.3,.4,.9],[.32,.4,.8],[.08,-.4,1.5]]) put(flame(s),x,0,z);
+    const lava=mesh(new THREE.RingGeometry(.6,.68,32),glow(0xff4a12,.9),0,.004,0); lava.rotation.x=-Math.PI/2; lava.scale.y=.72; g.add(lava);
+  }
+  if(kind==='water'){
+    const pond=mesh(new THREE.CircleGeometry(.6,32),mat(0x4fb4e8,{roughness:.15,metalness:.2}),0,.004,0); pond.rotation.x=-Math.PI/2; pond.scale.y=.7; g.add(pond);
+    for(const [x,z,h] of [[-.55,.14,.28],[-.47,.24,.16],[.56,.12,.32],[.46,.26,.14],[-.12,-.42,.4],[.04,-.45,.26],[.42,-.34,.22]])
+      g.add(mesh(new THREE.ConeGeometry(h*.18,h,5),mat(0xd9f6ff,{roughness:.2,transparent:true,opacity:.9}),x,h/2,z));
+  }
+  if(kind==='wind'){
+    put(prop('stump_old',.18,0x4e3b2c),-.56,0,.22); put(prop('log',.08,0x5b432f),.46,0,.34,.7);
+    for(const [x,z] of [[-.46,.06],[-.3,.38],[.24,.42],[.55,.02],[-.4,-.28],[.38,-.28],[0,-.38],[-.16,-.4],[.16,-.36]]){
+      const t=put(prop('grass_large',rand(.1,.17),0xd0ac58),x,0,z,rand(0,6)); grass.push(t)}
+  }
+  g.userData.grass=grass; return g;
+}
+
+/* Marks that make the villain easy to recognise: horns and glowing red eyes. */
+function villainMarks(){
+  const g=new THREE.Group(), bone=mat(0xf3ead2,{roughness:.5}), red=new THREE.MeshBasicMaterial({color:0xff1230});
+  for(const s of [-1,1]){
+    const horn=mesh(new THREE.ConeGeometry(.017,.13,6),bone,s*.048,.065,-.02); horn.rotation.set(-.45,0,-s*.55);
+    const eye=mesh(new THREE.SphereGeometry(.014,8,6),red,s*.027,.012,.045);
+    const halo=mesh(new THREE.SphereGeometry(.027,8,6),glow(0xff1230,.4),s*.027,.012,.045);
+    g.add(horn,eye,halo);
+  }
+  return g;
+}
+export function bolt(){
+  const g=new THREE.Group(), m=glow(0xffe95a,1); let a=V();
+  for(let i=1;i<5;i++){
+    const b=V((i%2?1:-1)*rand(.03,.08),-i*.09,0), seg=mesh(new THREE.CylinderGeometry(.009,.009,a.distanceTo(b),4),m);
+    seg.position.copy(a).add(b).multiplyScalar(.5); seg.quaternion.setFromUnitVectors(V(0,1,0),b.clone().sub(a).normalize()); g.add(seg); a=b;
+  }
+  return g;
+}
+export function frog(){
+  const g=new THREE.Group(), green=mat(0x53b83d), white=mat(0xffffff), black=mat(0x111111);
+  const body=mesh(new THREE.IcosahedronGeometry(.06,1),green); body.scale.set(1.2,.8,1); g.add(body);
+  for(const s of [-1,1]){g.add(mesh(new THREE.SphereGeometry(.026,8,6),white,s*.036,.05,.025),mesh(new THREE.SphereGeometry(.012,6,5),black,s*.036,.052,.048),
+    mesh(new THREE.IcosahedronGeometry(.028,0),green,s*.065,-.035,.02))}
+  return g;
 }
 
 /* Egg and decoy rocks share one generator so they look alike. */
@@ -70,11 +124,13 @@ export async function makeDragon(kind){
   const size=box.getSize(V()), s=.6/Math.max(size.x,size.y,size.z), ctr=box.getCenter(V());
   model.scale.multiplyScalar(s); model.position.set(-ctr.x*s,-ctr.y*s,-ctr.z*s);
   const spin=new THREE.Group(); spin.add(model);
+  const marks=kind==='storm'?villainMarks():null; if(marks)spin.add(marks);
   const root=new THREE.Group(); root.add(spin);
   let current='Idle_loop';
   return {root,spin,half:size.y*s/2,
     play(name){ if(name===current)return; actions[current].fadeOut(.2); actions[name].reset().fadeIn(.2).play(); current=name },
-    update(dt){ mixer.update(dt); if(head)head.scale.setScalar(kind==='storm'?1:1.4) },
+    update(dt){ mixer.update(dt); if(head)head.scale.setScalar(kind==='storm'?1:1.4);
+      if(marks&&head){root.updateWorldMatrix(true,true);marks.position.copy(spin.worldToLocal(head.getWorldPosition(v)))} },
     mouth(){ root.updateMatrixWorld(true); return head?head.getWorldPosition(V()):root.getWorldPosition(V()) }
   };
 }

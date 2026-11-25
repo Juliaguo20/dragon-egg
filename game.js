@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {DRAGONS,STORY,CARDS,EGG,POWER,ATTACKS} from './content.js';
-import {FLOOR,rand,V,mat,mesh,preload,prop,shadow,rockGeo,cracks,makeDragon,gem,flame,cloud,Effects} from './world.js';
+import {FLOOR,rand,V,mat,mesh,preload,prop,shadow,rockGeo,cracks,makeDragon,gem,flame,cloud,Effects,scenery,bolt,frog} from './world.js';
 import {startSensor,sensorActive,drag,updateCamera} from './ar.js';
 
 const $=id=>document.getElementById(id);
@@ -67,7 +67,7 @@ function every(fn){const id=run;tickers.push(dt=>id===run&&fn(dt)!==false)}
 function tween(sec,fn,done){let t=0;every(dt=>{t+=dt;const k=Math.min(1,t/sec);fn(k*k*(3-2*k),k);if(k===1){done&&done();return false}})}
 
 function setPhase(p){
-  phase=p; phaseT=0; run++; tickers=[]; tapHandler=moveHandler=null; windy=false; tracked=null;
+  phase=p; phaseT=0; run++; tickers=[]; tapHandler=moveHandler=null; windy=false; tracked=null; clearTags();
   show('meter',false); show('scanner',false); show('hearts',p==='battle');
   $('dock').classList.toggle('pass',false); clue(''); actions();
 }
@@ -90,6 +90,21 @@ function hud(){
   $('hearts').textContent='❤️'.repeat(S.hearts)+'🖤'.repeat(3-S.hearts);
 }
 function meter(v){show('meter');$('fill').style.width=clamp(v,0,1)*100+'%'}
+/* Name tags that stay on top of things in the scene. */
+let tags=[];
+function clearTags(){tags.forEach(t=>t.el.remove());tags=[]}
+function tag(o,html,cls,dy){
+  const el=document.createElement('div'); el.className=`tag ${cls}`; el.innerHTML=html; $('tags').append(el);
+  const t={o,el,dy}; tags.push(t); return t;
+}
+function drawTags(){
+  for(const t of tags){
+    const p=worldPos(t.o); p.y+=t.dy; p.project(camera);
+    const x=(p.x+1)/2*innerWidth, y=(1-p.y)/2*innerHeight;
+    t.el.hidden=!(p.z<1&&Math.abs(p.x)<1.05&&Math.abs(p.y)<1);
+    const half=t.el.offsetWidth/2; t.el.style.left=clamp(x,half+4,innerWidth-half-4)+'px'; t.el.style.top=Math.max(y,70)+'px';
+  }
+}
 function place(d,pos,scale){d.root.position.copy(pos);d.root.scale.setScalar(scale);d.root.rotation.set(0,0,0);d.spin.rotation.set(0,0,0);d.play('Flying_loop');world.add(d.root);return d}
 /* Keeps a dragon circling around the player until paused. */
 function fly(d,{angle=0,dist=2.3,y=.15,speed=.5}={}){
@@ -222,61 +237,68 @@ let debugEgg=null, debugTarget=null;
 function eggScene(card){
   const kind=card.dragon, info=EGG[kind];
   setPhase('find'); clearWorld(); recenter(); weather(kind); companions();
-  say(`${info.find} ${lookHint()}`);
-  const spots=[-8,-72,68,-140,142].map(a=>a+rand(-12,12));
-  const which=1+Math.floor(Math.random()*4); // never the rock straight ahead: the player has to turn
-  let egg, shine, knocks=0, stuck=false;
-  const rocks=spots.map((deg,i)=>{
-    const geo=rockGeo(), hue={fire:[.02,.08,.36],water:[.56,.22,.58],wind:[.6,.05,.44]}[kind];
+  say(info.find);
+  const stage=scenery(kind); stage.position.copy(at(0,2.1,FLOOR-.08)); world.add(stage);
+  const middle=new THREE.Object3D(); middle.position.y=.2; stage.add(middle);
+  // two rocks on a ledge at the back, three in front: all five fit on one screen
+  const spots=[[-.25,.13,-.17],[.25,.13,-.17],[-.43,0,.2],[0,0,.27],[.43,0,.2]];
+  const which=Math.floor(Math.random()*5);
+  let egg, shine, knocks=0, stuck=false, frogs=0;
+  const rocks=spots.map(([x,y,z],i)=>{
+    const geo=rockGeo(), hue={fire:[.02,.08,.4],water:[.56,.22,.55],wind:[.6,.05,.48]}[kind];
     const m=mesh(geo,mat(new THREE.Color().setHSL(hue[0],hue[1],hue[2]+rand(-.03,.03))));
-    const p=at(deg,rand(1.45,1.8),FLOOR);
-    m.position.set(p.x,FLOOR-geo.boundingBox.min.y*1.35,p.z); m.scale.setScalar(1.35); m.rotation.y=-THREE.MathUtils.degToRad(deg);
-    m.userData={y:m.position.y,flip:0}; world.add(m);
-    const sh=shadow(.19); sh.position.copy(p); world.add(sh);
-    for(const side of [-.26,.27]){
-      let t;
-      if(kind==='wind'){t=prop('grass_large',rand(.12,.19),0xc3a35a);t.userData.sway=true}
-      else if(kind==='water')t=mesh(new THREE.ConeGeometry(.03,rand(.1,.2),5),mat(0xd9f6ff,{roughness:.2}),0,.06,0);
-      else t=mesh(new THREE.OctahedronGeometry(rand(.025,.045)),new THREE.MeshBasicMaterial({color:0xff6a2a}),0,.03,0);
-      const g=new THREE.Group(); g.add(t); g.userData=t.userData; const q=at(deg+side*38,1.65,FLOOR); g.position.copy(q); world.add(g);
-    }
+    m.position.set(x,y-geo.boundingBox.min.y*1.2,z); m.scale.setScalar(1.2);
+    m.userData={y:m.position.y,flip:0}; stage.add(m);
+    if(y){const ledge=mesh(new THREE.CylinderGeometry(.14,.18,y,7),mat(0x5a4a48),x,y/2,z);stage.add(ledge)}
+    const sh=shadow(.14); sh.position.set(x,y+.008,z); stage.add(sh);
     if(i===which){egg=m;shine=cracks(geo,{fire:0xff3d12,water:0x8fe6ff,wind:0xa8fff4}[kind]);m.add(shine)}
     return m;
   });
-  // cracks are generated on the +z side, which already faces the player after the yaw above
-  const ring=mesh(new THREE.TorusGeometry(.22,.012,6,36),new THREE.MeshBasicMaterial({color:0xffe27a}),egg.position.x,FLOOR+.015,egg.position.z);
-  ring.rotation.x=Math.PI/2; ring.visible=false; world.add(ring); debugEgg=egg;
+  stage.scale.setScalar(.2); tween(.9,k=>stage.scale.setScalar(.2+.8*k)); sfx.chirp();
+  track(middle,card.title.includes('Egg')?card.title:'Eggs',2);
+  const ring=mesh(new THREE.TorusGeometry(.17,.012,6,36),new THREE.MeshBasicMaterial({color:0xffe27a}),egg.position.x,egg.position.y-.11,egg.position.z);
+  ring.rotation.x=Math.PI/2; ring.visible=false; stage.add(ring); debugEgg=egg; debugTarget=rocks[(which+1)%5];
   const ripple=()=>{for(const d of [0,.28])later(d,()=>{
-    const r=mesh(new THREE.TorusGeometry(.17,.008,6,36),new THREE.MeshBasicMaterial({color:0xbdf2ff,transparent:true}),egg.position.x,FLOOR+.025,egg.position.z);
-    r.rotation.x=Math.PI/2; world.add(r);
-    tween(.8,k=>{r.scale.setScalar(1+k*1.5);r.material.opacity=1-k},()=>world.remove(r));
+    const r=mesh(new THREE.TorusGeometry(.13,.008,6,36),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}),egg.position.x,egg.position.y-.1,egg.position.z);
+    r.rotation.x=Math.PI/2; stage.add(r);
+    tween(.8,k=>{r.scale.setScalar(1+k*1.2);r.material.opacity=1-k},()=>stage.remove(r));
   })};
+  function wrong(o){
+    o.userData.flip=.001; S.misses++;
+    const p=worldPos(o);
+    if(frogs++%2===0){
+      const f=frog(), from=o.position.clone(), side=from.x>0?1:-1; stage.add(f); sfx.chirp(); say('Ribbit! A frog was hiding there. Try another rock.');
+      tween(1.3,k=>{f.position.set(from.x+side*k*.45,from.y+Math.abs(Math.sin(k*Math.PI*2))*.22,from.z+k*.3);f.scale.setScalar(k>.8?(1-k)*5+.01:1)},()=>stage.remove(f));
+    }else{fx.puff('smoke',0xb9aca0,p,16,.3,.2);sfx.thud();say('Poof! Only dust. Try another rock.')}
+    later(2.4,()=>{if(phase==='find')say(stuck?info.stuck:info.find)});
+  }
   tapHandler=e=>{
     const h=hit(e,rocks); if(!h)return; let o=h.object; while(o&&!rocks.includes(o))o=o.parent; if(!o)return;
     if(o===egg){
       if(kind==='water'&&knocks===0){knocks++;sfx.echo();ripple();say('Knock, knock! Something inside answered. Tap it again to pick it up.');return}
       hatch(card,egg,shine);return;
     }
-    if(kind==='water')sfx.thud();
-    if(!o.userData.flip){o.userData.flip=.001;S.misses++;say('Just a rock. Keep looking around!')}
+    if(!o.userData.flip)wrong(o);
   };
   every(dt=>{
     const cyc=phaseT%4.5, late=cyc-.55, wob=late>0&&late<1.2?Math.sin(late/1.2*Math.PI):0;
+    const gust=windy&&cyc<1.5?Math.sin(cyc/1.5*Math.PI):0;
+    stage.userData.grass.forEach((t,i)=>t.rotation.z=-gust*(.5+.08*Math.sin(T*14+i)));
     if(kind==='wind'){
-      egg.rotation.z=Math.sin(T*16)*.13*wob*(stuck?1.8:1); shine.userData.mat.opacity=wob*(stuck?1:.8);
+      egg.rotation.z=Math.sin(T*16)*.16*wob*(stuck?1.7:1); shine.userData.mat.opacity=wob*(stuck?1:.8);
     }else if(kind==='fire'){
       const pulse=Math.max(0,Math.sin(phaseT*2.1))**4; shine.userData.mat.opacity=pulse*(stuck?1:.85);
-      egg.material.emissive.setHex(0xff2200); egg.material.emissiveIntensity=stuck?pulse*.35:0;
+      egg.material.emissive.setHex(0xff2200); egg.material.emissiveIntensity=pulse*(stuck?.35:.12);
     }else{
       shine.userData.mat.opacity=knocks?.7:0;
       if(stuck&&phaseT%3<dt){ripple();sfx.echo()}
     }
-    rocks.forEach(r=>{const u=r.userData;if(u.flip){u.flip+=dt/1.1;const f=Math.min(u.flip,1);r.rotation.x=f*TAU;r.position.y=u.y+Math.sin(f*Math.PI)*.2;if(u.flip>=1){u.flip=0;r.rotation.x=0;r.position.y=u.y}}});
+    rocks.forEach(r=>{const u=r.userData;if(u.flip){u.flip+=dt/1.1;const f=Math.min(u.flip,1);r.rotation.x=f*TAU;r.position.y=u.y+Math.sin(f*Math.PI)*.16;if(u.flip>=1){u.flip=0;r.rotation.x=0;r.position.y=u.y}}});
     ring.scale.setScalar(1+.08*Math.sin(T*6));
   });
   windy=kind==='wind';
-  later(25,()=>{stuck=true;say(info.stuck)});
-  later(45,()=>{ring.visible=true;track(egg,'Egg');say('Need help? Follow the arrow and tap the rock in the yellow ring.')});
+  later(20,()=>{stuck=true;say(info.stuck)});
+  later(35,()=>{ring.visible=true;say('Need help? Tap the rock in the yellow ring.')});
 }
 
 function hatch(card,egg,shine){
@@ -392,77 +414,128 @@ function tryPower(card){
 }
 
 /* ---------- battle ---------- */
+const TEAM=['fire','water','wind'];
+/* Storm Dragon above, your three dragons below, all hovering slowly in one view. */
 function battleStage(){
   clearWorld(); recenter(); weather('storm');
-  place(dragons.storm,at(0,2.8,.35),1.9);
-  const boss=dragons.storm, path=fly(boss,{angle:0,dist:2.8,y:.35,speed:.2});
-  const team=['fire','water','wind'].map((k,i)=>{const a=(i-1)*2.1+1;const d=place(dragons[k],at(a*57.3,2,-.35),.75);d.orbit=fly(d,{angle:a,dist:2,y:-.38,speed:-.28});return d});
+  const boss=place(dragons.storm,at(0,2.9,.38),1.5);
+  const stone=gem(0xc36bff,.09); stone.userData.halo.material.color.set(0xffe27a); world.add(stone);
+  const bolts=[0,1,2].map(()=>{const b=bolt();b.visible=false;world.add(b);return b});
+  const path={a:0,goal:0,teamA:0,paused:false};
+  const members=TEAM.map((k,i)=>{
+    const d=place(dragons[k],at((i-1)*10.5,2.3,-.3),.5);
+    const m={d,k,off:THREE.MathUtils.degToRad((i-1)*10.5),turn:(1-i)*.55,i,busy:false,blend:1,from:V()};
+    m.resume=()=>{m.from.copy(d.root.position);m.blend=0;m.busy=false;d.play('Flying_loop')};
+    return m;
+  });
+  let next=0;
+  const move=dt=>{
+    if(!path.paused){
+      path.a+=(path.goal-path.a)*Math.min(1,dt*.7);
+      const a=path.a+Math.sin(T*.45)*.05, p=V(Math.sin(a)*2.9,.38+Math.sin(T*.9)*.06,-Math.cos(a)*2.9);
+      boss.root.position.copy(p); boss.root.rotation.set(0,-a+Math.sin(T*.35)*.55,0);
+      stone.position.copy(p).multiplyScalar(.93); stone.position.y=p.y-.27; stone.rotation.y=T*1.5;
+    }
+    next-=dt;
+    bolts.forEach((b,i)=>{
+      if(next<=0){const s=i===0?-1:i===1?1:Math.random()<.5?-1:1;b.position.copy(boss.root.position).multiplyScalar(.97);b.position.add(V(Math.cos(path.a)*s*rand(.3,.52),rand(.15,.42),Math.sin(path.a)*s*.4));b.visible=!path.paused&&Math.random()<.75}
+      else if(next<.55)b.visible=false;
+    });
+    if(next<=0)next=.75;
+    path.teamA+=(path.a-path.teamA)*Math.min(1,dt*1.3);
+    members.forEach(m=>{
+      if(m.busy)return;
+      const a=path.teamA+m.off, p=V(Math.sin(a)*2.3,-.3+Math.sin(T*1.2+m.i*2)*.04,-Math.cos(a)*2.3);
+      m.blend=Math.min(1,m.blend+dt*.8);
+      m.d.root.position.copy(m.blend<1?m.from.clone().lerp(p,m.blend):p);
+      m.d.root.rotation.set(0,Math.PI-a+m.turn+Math.sin(T*.7+m.i)*.15,0);
+    });
+  };
+  move(0); every(move);
   debugTarget=boss.root; track(boss.root,'Storm Dragon',1);
-  return {boss,path,team};
+  return {boss,path,members,stone,bolts};
 }
+const bossTag=(boss,hp)=>tag(boss.root,`👿 STORM DRAGON<span>${'▰'.repeat(hp)}${'▱'.repeat(3-hp)}</span>`,'bad',.5);
+const teamTag=m=>tag(m.d.root,`${DRAGONS[m.k].icon} ${DRAGONS[m.k].name.split(' ')[0]}`,m.k,-.19);
+/* First show the villain alone, then bring in your three dragons. */
 function battleIntro(){
-  S.battle=true; S.hearts=3; save(); setPhase('intro'); hud(); battleStage(); sfx.roar(); track(dragons.storm.root,'Storm Dragon',1);
-  say(`The Storm Dragon is flying around you! Keep it on your screen, then choose the dragon that can stop it. You have 3 hearts. ${lookHint()}`);
-  actions(['Start the battle',battle]);
+  S.battle=true; S.hearts=3; save(); setPhase('intro'); hud(); show('hearts',false);
+  const {boss,members}=battleStage();
+  members.forEach(m=>{m.busy=true;world.remove(m.d.root)});
+  bossTag(boss,3); sfx.roar(); boss.play('Attack'); later(1.2,()=>boss.play('Flying_loop'));
+  tween(1.2,k=>boss.root.scale.setScalar(.4+1.1*k));
+  say('This is the STORM DRAGON! It has red eyes and horns, and it is holding the Power Stone.');
+  later(4,()=>{
+    say('Your dragons are coming!'); sfx.chirp();
+    members.forEach((m,i)=>later(i*.35,()=>{world.add(m.d.root);m.d.root.position.copy(at((i-1)*30,1.7,-1.3));m.resume();teamTag(m)}));
+  });
+  later(6.5,()=>{
+    say(`Three against one! Keep them on your screen and pick the right dragon for each attack. You have 3 hearts. ${lookHint()}`);
+    actions(['Start the battle',battle]);
+  });
 }
 function battle(){
-  setPhase('battle'); S.hearts=3; hud(); const {boss,path,team}=battleStage();
+  setPhase('battle'); S.hearts=3; hud(); const {boss,path,members,stone,bolts}=battleStage();
+  let hp=3, bt=bossTag(boss,hp); members.forEach(teamTag);
   const order=[...ATTACKS].sort(()=>Math.random()-.5); let round=0;
   const center=()=>worldPos(boss.root);
   const next=()=>{
     const a=order[round]; let shield, active=true; sfx.roar(); boss.play('Attack'); later(1,()=>boss.play('Flying_loop'));
-    path.speed=0;
-    if(a.beats==='fire')shield=mesh(new THREE.IcosahedronGeometry(.66,1),new THREE.MeshStandardMaterial({color:0xaee8ff,transparent:true,opacity:.4,flatShading:true,depthWrite:false}));
-    if(a.beats==='wind'){shield=cloud();shield.scale.setScalar(2.5)}
-    if(shield){world.add(shield);every(()=>{if(!shield.parent)return false;if(active){shield.position.copy(boss.root.position);if(a.beats==='wind')shield.lookAt(0,shield.position.y,0)}})}
+    const prompt=`Round ${round+1} of 3: ${a.text} ${a.ask}`;
+    if(a.beats==='fire')shield=mesh(new THREE.IcosahedronGeometry(.56,1),new THREE.MeshStandardMaterial({color:0xaee8ff,transparent:true,opacity:.4,flatShading:true,depthWrite:false}));
+    if(a.beats==='wind'){shield=cloud();shield.scale.setScalar(1.6)}
+    // the cloud sits in front of the body but low enough to leave the horns and eyes visible
+    if(shield){world.add(shield);every(()=>{if(!shield.parent)return false;if(active){shield.position.copy(boss.root.position);if(a.beats==='wind'){shield.position.multiplyScalar(.9);shield.position.y-=.22;shield.lookAt(0,shield.position.y,0)}}})}
     if(a.beats==='water'){let t=0;every(dt=>{if(!active)return false;t-=dt;if(t<=0){t=.1;const m=boss.mouth(),v=m.clone().multiplyScalar(-.45).add(V(rand(-.4,.4),rand(.1,.7),rand(-.4,.4)));fx.add('shell',Math.random()<.5?0xff4a12:0xffa21f,m,v,1,-1.6)}})}
-    debugTarget=boss.root; track(boss.root,'Storm Dragon');
+    let ready=true;
     const choose=k=>{
+      if(!ready)return;
       if(!aim(boss.root).on){
         const warn='Turn your phone and get the Storm Dragon on your screen first!'; say(warn); sfx.thud();
-        later(2.5,()=>{if(active&&$('msg').textContent===warn)say(`Round ${round+1} of 3: ${a.text}`)}); return;
+        later(2.5,()=>{if(active&&$('msg').textContent===warn)say(prompt)}); return;
       }
-      const d=team[['fire','water','wind'].indexOf(k)]; actions(); d.orbit.paused=true; say(`${DRAGONS[k].name}, go!`);
-      const target=center();
-      swoop(d,inFront(-.3,-.3,1.35),target,.8,()=>{
+      ready=false; const m=members[TEAM.indexOf(k)], d=m.d; actions(); m.busy=true; say(`${DRAGONS[k].name}, go!`);
+      const to=d.root.position.clone().lerp(boss.root.position,.3);
+      swoop(d,to,center(),.8,()=>{
         d.play('Attack'); sfx.power(k); fx.stream(k,d.mouth(),center(),100);
         if(k!==a.beats){
-          later(1.2,()=>{d.orbit.resume();S.hearts--;S.misses++;hud();save();sfx.bad();
+          later(1.2,()=>{m.resume();S.hearts--;S.misses++;hud();save();sfx.bad();
             if(S.hearts<=0){active=false;say('Your dragons need a rest. Remember what each power does, then try again!');actions(['Try the battle again',battle]);return}
-            say(a.miss);buttons()});
+            say(`${a.miss}`);ready=true;buttons()});
           return;
         }
         later(.8,()=>{
-          active=false;
+          active=false; hp--; bt.el.querySelector('span').textContent='▰'.repeat(hp)+'▱'.repeat(3-hp);
           if(shield){const from=shield.position.clone();tween(.8,k2=>{if(a.beats==='fire'){shield.scale.setScalar(1+k2*.6);shield.material.opacity=.4*(1-k2)}else{shield.position.x=from.x+k2*2.5;shield.userData.mat.opacity=.96*(1-k2)}},()=>world.remove(shield))}
           else fx.puff('smoke',0x999999,center(),30,.5,.3);
           sfx.win(); say(a.win);
         });
-        later(2.2,()=>{d.orbit.resume();round++;
-          if(round<order.length){ // the boss escapes to another part of the room
-            say('It is flying away! Follow it!'); path.speed=(Math.random()<.5?-1:1)*rand(.9,1.2); later(2.4,next);
-          }else defeat(boss,path,team)});
+        later(2.4,()=>{m.resume();round++;
+          if(round<order.length){ // the boss drifts to one side; your dragons follow it
+            say('It is moving! Keep it on your screen.'); path.goal=(path.goal>0?-1:1)*rand(.28,.38); later(3,next);
+          }else{bolts.forEach(b=>world.remove(b));bt.el.remove();tags=tags.filter(t=>t!==bt);defeat(boss,path,members,stone)}});
       });
     };
     const buttons=()=>{
-      actions(...['fire','water','wind'].map(k=>[`${DRAGONS[k].icon} ${DRAGONS[k].name.split(' ')[0]}`,()=>choose(k),true]));
+      actions(...TEAM.map(k=>[`${DRAGONS[k].icon} ${DRAGONS[k].name.split(' ')[0]}`,()=>choose(k),true]));
       const row=document.createElement('div');row.className='row';row.append(...$('actions').children);$('actions').append(row);
     };
-    say(`Round ${round+1} of 3: ${a.text}`); buttons();
+    // tapping a dragon works the same as tapping its button
+    tapHandler=e=>{const m=members.find(m=>!m.busy&&near(e,m.d.root,55));if(m&&active)choose(m.k)};
+    say(prompt); buttons();
   };
   say('Here it comes! Keep your eyes on it.'); later(2,next);
 }
-function defeat(boss,path,team){
-  actions(); show('hearts',false); say('All three attacks are broken! The Storm Dragon is falling!'); sfx.roar(); path.paused=true; track(boss.root,'Storm Dragon');
-  const from=boss.root.position.clone();
-  tween(1.8,k=>{boss.root.position.set(from.x*(1+k*.1),from.y-k*1.4,from.z*(1+k*.1));boss.root.rotation.z=k*3.5;boss.root.scale.setScalar(1.9*(1-k*.8))},()=>{
+function defeat(boss,path,members,st){
+  actions(); tapHandler=null; show('hearts',false); say('All three attacks are broken! The Storm Dragon drops the Power Stone!'); sfx.roar(); path.paused=true; debugTarget=st; track(st,'Power Stone',2);
+  const from=boss.root.position.clone(), s0=boss.root.scale.x, sf=st.position.clone();
+  tween(1.8,k=>{boss.root.position.set(from.x*(1+k*.1),from.y-k*1.4,from.z*(1+k*.1));boss.root.rotation.z=k*3.5;boss.root.scale.setScalar(s0*(1-k*.8))},()=>{
     world.remove(boss.root);
-    const st=gem(0xc36bff,.17); st.userData.halo.material.color.set(0xffe27a); st.position.copy(from); world.add(st); debugTarget=st;
-    const land=from.clone().setY(0).normalize().multiplyScalar(1.8).setY(-.3);
-    tween(1.2,k=>st.position.lerpVectors(from,land,k)); track(st,'Power Stone');
-    every(()=>{st.rotation.y=T*1.8;st.userData.halo.scale.setScalar(1+.12*Math.sin(T*5))});
-    later(1.3,()=>{say('The Power Stone! Find it and tap it to claim it.');tapHandler=e=>{if(near(e,st,110))finale(st,team)}});
   });
+  const land=sf.clone().setY(0).normalize().multiplyScalar(1.8).setY(-.05);
+  tween(1.8,k=>{st.position.lerpVectors(sf,land,k);st.scale.setScalar(1+k*.8)});
+  every(()=>{st.rotation.y=T*1.8;st.userData.halo.scale.setScalar(1+.12*Math.sin(T*5))});
+  later(2.6,()=>{say('The Power Stone! Find it and tap it to claim it.');tapHandler=e=>{if(near(e,st,100))finale(st,members.map(m=>m.d))}});
 }
 function finale(stone,team){
   setPhase('finale'); weather('wind'); sfx.win(); say('The Power Stone shines! Fire, water and wind join together!'); track(stone,'Power Stone');
@@ -471,8 +544,8 @@ function finale(stone,team){
   tween(1.2,k=>stone.position.lerpVectors(c,up,k));
   // three dragons gather around the stone
   const dir=c.clone().setY(0).normalize(), right=V(-dir.z,0,dir.x);
-  team.forEach((d,i)=>{const to=c.clone().addScaledVector(right,(i-1)*.55).addScaledVector(dir,i===1?.45:0).setY(i===1?.1:-.2), s0=d.root.scale.x;
-    d.play('Flying_loop'); swoop(d,to,world.localToWorld(c.clone()),1.4); tween(1.4,k=>d.root.scale.setScalar(s0+.2*k))});
+  team.forEach((d,i)=>{const to=c.clone().addScaledVector(right,(i-1)*.38).addScaledVector(dir,i===1?.45:0).setY(i===1?-.34:-.16), s0=d.root.scale.x;
+    d.play('Flying_loop'); swoop(d,to,world.localToWorld(c.clone()),1.4); tween(1.4,k=>d.root.scale.setScalar(s0+.04*k))});
   let t=0, a=0, shot=0;
   every(dt=>{ // three-colour tornado
     t+=dt; shot-=dt; a+=dt*9;
@@ -484,8 +557,11 @@ function finale(stone,team){
       if(shot<=0){shot=1.1;sfx.power('wind');team.forEach((d,i)=>{d.play('Attack');fx.stream(['fire','water','wind'][i],d.mouth(),worldPos(stone),35)})}
     }
   });
-  later(6,()=>{say('Your dragons are strong! Look around and watch them fly!');sfx.win();tracked=null;
-    team.forEach((d,i)=>fly(d,{angle:Math.atan2(d.root.position.x,-d.root.position.z),dist:1.9+i*.25,y:i*.22-.1,speed:.75}).resume())});
+  later(6,()=>{say('You did it! Watch your three dragons fly together!');sfx.win();tracked=null;
+    // a slow victory flight that keeps all three dragons in the same view
+    team.forEach((d,i)=>{const base=d.root.position.clone(), start=T; d.play('Flying_loop');
+      every(()=>{const t=(T-start)*1.1, k=Math.min(1,t); d.root.position.set(base.x+right.x*Math.sin(t+i*2.1)*.07*k,base.y+(Math.sin(t*1.4+i*2.1)*.12+.08)*k,base.z+right.z*Math.sin(t+i*2.1)*.07*k);d.root.rotation.y=Math.atan2(-base.x,-base.z)+Math.sin(t*.8+i*2.1)*.7*k})});
+  });
   later(12,end);
 }
 function end(){
@@ -516,7 +592,7 @@ function frame(){
   }
   world.updateMatrixWorld(true);
   Object.values(dragons).forEach(d=>{if(d.root.parent)d.update(dt)});
-  updateCamera(camera); drawArrow(); fx.update(dt); renderer.render(scene,camera);
+  updateCamera(camera); drawArrow(); drawTags(); fx.update(dt); renderer.render(scene,camera);
 }
 
 /* ---------- start ---------- */

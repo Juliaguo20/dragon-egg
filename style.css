@@ -31,3 +31,9 @@ input{width:100%;padding:10px;text-align:center;text-transform:uppercase;backgro
 #scanner{position:fixed;inset:0;z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center}
 #scanner div{width:min(66vw,280px);aspect-ratio:1;border:4px solid #ffe27a;border-radius:22px;box-shadow:0 0 0 100vmax #0006;margin-bottom:22vh}
 #arrow{position:fixed;z-index:3;pointer-events:none;transform:translate(-50%,-50%);background:#ffe27a;border:2px solid #8a6424;border-radius:22px;padding:8px 14px;font-weight:bold;font-size:16px;white-space:nowrap;box-shadow:0 3px 14px #0007}
+#tags{position:fixed;inset:0;pointer-events:none}
+.tag{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font-size:13px;font-weight:bold;color:#fff;background:#555;border:2px solid #fff;border-radius:999px;padding:2px 9px;text-align:center}
+.tag[hidden]{display:none}
+.tag.fire{background:#c2402a}.tag.water{background:#1f6fc4}.tag.wind{background:#23804a}
+.tag.bad{background:#3a0d18;border-color:#ff3048;border-radius:10px;font-size:15px}
+.tag.bad span{display:block;color:#ff4a5e;letter-spacing:2px;font-size:17px;line-height:1.1}

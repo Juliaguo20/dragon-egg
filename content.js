@@ -24,11 +24,11 @@ export const CARDS = [
 ];
 
 export const EGG = {
-  fire:  {find:'Turn around! Tap the rock that glows red.', stuck:'Look for the cracks that light up.',
+  fire:  {find:'One of these 5 rocks is the Fire Egg. Tap the one that glows red.', stuck:'Look for the cracks that light up.',
           hatch:'Rub the screen quickly to warm the egg!', baby:'Achoo! Only black smoke comes out. Your baby dragon has no power yet.'},
-  water: {find:'Turn around! Tap rocks until one knocks back.', stuck:'Listen for two knocks and watch for ripples.',
+  water: {find:'One of these 5 rocks is the Water Egg. Tap rocks until one knocks back.', stuck:'Listen for two knocks and watch for ripples.',
           hatch:'Press and hold the screen to melt the ice.', baby:'Blub… only tiny bubbles. Your baby dragon has no power yet.'},
-  wind:  {find:'Turn around! Tap the rock that wobbles in the wind.', stuck:'Watch the grass, then the rocks.',
+  wind:  {find:'One of these 5 rocks is the Wind Egg. Tap the one that wobbles in the wind.', stuck:'Watch the grass, then the rocks.',
           hatch:'Draw circles around the egg to make a whirlwind!', baby:'It flaps and flips itself over! Your baby dragon has no power yet.'}
 };
 
@@ -39,7 +39,7 @@ export const POWER = {
 };
 
 export const ATTACKS = [
-  {beats:'fire',  text:'The Storm Dragon puts on ICE ARMOR!', win:'The fire melts the ice armor!', miss:'The ice does not budge. What melts ice?'},
-  {beats:'water', text:'The Storm Dragon spits hot LAVA!', win:'The water cools the lava into stone!', miss:'The lava is still burning. What cools it?'},
-  {beats:'wind',  text:'The Storm Dragon hides in a DARK CLOUD!', win:'The wind blows the cloud away!', miss:'You still cannot see it. What moves clouds?'}
+  {beats:'fire', ask:'Who can melt ice?',  text:'The Storm Dragon puts on ICE ARMOR!', win:'The fire melts the ice armor!', miss:'The ice does not budge. What melts ice?'},
+  {beats:'water', ask:'Who can cool the lava?', text:'The Storm Dragon spits hot LAVA!', win:'The water cools the lava into stone!', miss:'The lava is still burning. What cools it?'},
+  {beats:'wind', ask:'Who can blow it away?',  text:'The Storm Dragon hides in a DARK CLOUD!', win:'The wind blows the cloud away!', miss:'You still cannot see it. What moves clouds?'}
 ];
